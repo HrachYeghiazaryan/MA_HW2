@@ -1,2 +1,5 @@
-# MA_HW2
-Repository for Marketing Analytics course homework 2
+# DS233, Marketing Analytics Homework 2
+
+The classes for algorithm Epsilon Greedy and Thompson Sampling can be found in file Bandit.py
+
+The results are discussed in the notebook results.ipynb

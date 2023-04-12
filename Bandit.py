@@ -57,8 +57,8 @@ class Bandit(ABC):
         pass
 
 #--------------------------------------#
-## I will leave epsilon as simple as possible being 1/t where t is the number of trials
-## Also, in Thompson Sampling I will leave precision again as simple as possible, 1.
+# I will leave epsilon as simple as possible being 1/t where t is the number of current trial.
+# Also, in Thompson Sampling I will leave precision again as simple as possible, 1.
 class EpsilonGreedy(Bandit):
     def __init__(self, p):
         super().__init__(p)
@@ -66,11 +66,10 @@ class EpsilonGreedy(Bandit):
         self.N = 0
 
     def __repr__(self):
-        """A useless function for calling outside the class, as the parameter p passed when
-        instantiating the class is not playing any role, the ones that play a role are passed
-        below in the experiment function.        
         """
-        return f'An Arm with {self.p} Win Rate'
+        A description for the class.     
+        """
+        return 'A complete class to run Epsilon Greedy algorithm'
 
     def pull(self):
         """
@@ -114,7 +113,8 @@ class EpsilonGreedy(Bandit):
             else:
                 j = np.argmax([b.p_estimate for b in bandits])
 
-            exp_reward = (1-eps)*bandits[j].p_estimate + eps*(sum([bandit.p_estimate for bandit in bandits])-bandits[j].p_estimate)
+            band_max = np.argmax([b.p_estimate for b in bandits])
+            exp_reward = (1-eps)*bandits[band_max].p_estimate + eps*((sum([bandit.p_estimate for bandit in bandits])-bandits[band_max].p_estimate)/(len(bandits)-1))
             lr_ls.append(exp_reward) 
             b_ls.append(j)
 
@@ -141,15 +141,15 @@ class EpsilonGreedy(Bandit):
     
     def plot_performance(self):
         """
-        Plots the expected reward for each trial.
+        Plots the cumulative average.
         """
         plt.plot(self.cumulative_average, label=f'harmonically decaying epsilon')
-        plt.title('Win rate convergence')
+        plt.title('Win rate convergence for Epsilon Greedy')
         plt.xlabel('Number of trials')
         plt.ylabel('Estimated reward')
         plt.show()
 
-    def report(self, verbose=True):
+    def report(self, verbose=True, df_save_path=None):
         """
         Plots the statistics and outputs a dataframe with columns [Bandit, Reward, Algorithm]
         Inputs:
@@ -159,17 +159,19 @@ class EpsilonGreedy(Bandit):
             fig, (ax1, ax2) = plt.subplots(2,1)
             fig.set_size_inches(10,10)
             ax1.plot(self.learning)
-            ax1.set_title('The learning rate of epsilon greedy with epsilon 1/t')
+            ax1.set_title('The learning rate of Epsilon Greedy with epsilon 1/t')
             ax1.set_xlabel('trial')
             ax1.set_ylabel('expected reward')
             ax2.plot(self.cumulative_reward)
-            ax2.set_title('The cumulative reward of epsilon greedy with epsilon 1/t')
+            ax2.set_title('The cumulative reward of Epsilon Greedy with epsilon 1/t')
             ax2.set_xlabel('number of trials')
             ax2.set_ylabel('cumulative reward')
             logger.info(f'Cumulative reward: {np.sum(self.rewards)}')
             logger.info(f'Cumulative regret: {self.regret}')
         df_dict = {'Bandit': self.bandit_choices, 'Reward': self.rewards, 'Algorithm': 'Epsilon-Greedy'}
         df = pd.DataFrame(df_dict)
+        if df_save_path!=None:
+            df.to_csv(df_save_path)
         return df
 
 
@@ -184,11 +186,10 @@ class ThompsonSampling(Bandit):
         self.cum_reward = 0
 
     def __repr__(self):
-        """A useless function for calling outside the class, as the parameter p passed when
-        instantiating the class is not playing any role, the ones that play a role are passed
-        below in the experiment function.        
         """
-        return f'An Arm with {self.p} Win Rate'
+        A description for the class.     
+        """
+        return 'A complete class to run Thompson Sampling algorithm'
 
     def pull(self):
         """
@@ -214,7 +215,7 @@ class ThompsonSampling(Bandit):
         self.m = (self.tau*self.cum_reward)/self.lambda_
         self.N += 1
     
-    def plot_performance(self, bandits, num_trials):
+    def __plot_distributions(self, bandits, num_trials):
         """
         Plots the posterior distributions of rewards for each bandit when a particular number
         of trials is done.
@@ -228,7 +229,7 @@ class ThompsonSampling(Bandit):
         for bandit in bandits:
             y = norm.pdf(x, bandit.m, np.sqrt(1/bandit.lambda_))
             plt.plot(x, y, label=f"True Mean: {bandit.p:.2f}, Num of Trials: {bandit.N}")
-            plt.title(f"Bandit distributions after {num_trials} trials")
+            plt.title(f"Beliefs of bandit reward distributions after {num_trials} trials")
         plt.legend()
         plt.show()
 
@@ -263,18 +264,9 @@ class ThompsonSampling(Bandit):
             rewards.append(res)
 
             if (i in num_samples_plot) & verbose:
-                self.plot_performance(bandits, i)
+                self.__plot_distributions(bandits, i)
         
-        cumulative_average = np.cumsum(rewards)/(np.arange(num_trials)+1)
-
-        if verbose:
-            plt.plot(cumulative_average)
-        
-            for mean in bandit_means:
-                plt.plot(np.ones(num_trials)*mean)
-
-            plt.show()
-
+        self.cumulative_average = np.cumsum(rewards)/(np.arange(num_trials)+1)
         self.learning = lr_ls
         self.cumulative_reward = np.cumsum(rewards)
         self.bandit_choices = b_ls
@@ -282,7 +274,17 @@ class ThompsonSampling(Bandit):
         self.regret = count_suboptimal
         self.best_bandit_index = np.argmax([bandit.sample() for bandit in bandits])
 
-    def report(self, verbose=True):
+    def plot_performance(self):
+        """
+        Plots the cumulative average.
+        """
+        plt.plot(self.cumulative_average, label=f'harmonically decaying epsilon')
+        plt.title('Win rate convergence for Thompson Sampling')
+        plt.xlabel('Number of trials')
+        plt.ylabel('Estimated reward')
+        plt.show()
+
+    def report(self, verbose=True, df_save_path=None):
         """
         Plots the statistics and outputs a dataframe with columns [Bandit, Reward, Algorithm]
         Inputs:
@@ -292,29 +294,37 @@ class ThompsonSampling(Bandit):
             fig, (ax1, ax2) = plt.subplots(2,1)
             fig.set_size_inches(10,10)
             ax1.plot(self.learning)
-            ax1.set_title('The learning rate of epsilon greedy with epsilon 1/t')
+            ax1.set_title('The learning rate of Thompson sampling')
             ax1.set_xlabel('trial')
             ax1.set_ylabel('expected reward')
             ax2.plot(self.cumulative_reward)
-            ax2.set_title('The cumulative reward of epsilon greedy with epsilon 1/t')
+            ax2.set_title('The cumulative reward of Thompson sampling')
             ax2.set_xlabel('number of trials')
             ax2.set_ylabel('cumulative reward')
             logger.info(f'Cumulative reward: {np.sum(self.rewards)}')
             logger.info(f'Cumulative regret: {self.regret}')
         df_dict = {'Bandit': self.bandit_choices, 'Reward': self.rewards, 'Algorithm': 'Thompson-Sampling'}
         df = pd.DataFrame(df_dict)
+        if df_save_path!=None:
+            df.to_csv(df_save_path)
         return df
+
+# Since the algorithms have the purpose to first of all find the better arm, therefore,
+# the function first checks whose best arm has higher reward.
+# If the two algorithms return arms that have equal true reward as optimal,the next most 
+# important thing from business perspective is how much money did the business 
+# lose due to the exploration part. It isn't a good idea to look on the number of regrets, since in 
+# business the money is the most important and therefore we will pay attention to the cumulative gains 
+# on each step. Then, to be formal we will conduct a t-test whether the mean of rewards from epsilon
+#greedy is not equal to mean of rewards from Thompson sampling.
 
 def comparison(bandit_rewards = [1,2,3,4], num_trials=20000, seed=42): 
     """
     A function that compares the Epsilon Greedy and Thompson Sampling algorithms.
-    Since the algorithms have the purpose to first of all find the better arm, therefore,
-    the function first checks whose best arm has higher reward.
-    If the two algorithms return arms that have equal true reward as optimal,the next most 
-    important thing from business perspective is how much money did the business 
-    lose due to the exploration part. It isn't a good idea to look on the number of regrets, since in 
-    business the money is the most important and therefore we will pay attention to the cumulative gains 
-    on each step. 
+    Inputs:
+    bandit_reward := The actual rewards that bandits have
+    num_trials := The number of trials to be performed
+    seed := random seed
     """
     epsilon_greedy = EpsilonGreedy(1)
     epsilon_greedy.experiment(bandit_reward=bandit_rewards, num_trials=num_trials, seed=seed, verbose=False)
@@ -337,13 +347,12 @@ def comparison(bandit_rewards = [1,2,3,4], num_trials=20000, seed=42):
         thompson_cumsum = np.cumsum(thompson_rewards)
         diff_ls = epsilon_cumsum-thompson_cumsum
         plt.plot(diff_ls)
-        plt.title('The difference of cumulative sums of rewards')
+        plt.title('Cumsum(Epsilon Greedy rewards)-Cumsum(Thompson Sampling rewards)')
         plt.xlabel('Number of trials')
         plt.ylabel('Difference of cumulative sums')
         plt.show()
-        #Then, we will conduct more formal experiment, we'll do t-test to see whether the distribution
-        #of rewards from one experiment is greater than the other one.
-        logger.info(ttest_ind(epsilon_rewards, thompson_rewards, alternative='greater'))
+        logger.info('T-test results whether the mean of rewards from Epsilon Greedy is the same as of the Thompson Sampling (alternative hypothesis mean(Epsilon Greedy)!=mean(Thompson Sampling))')
+        logger.info(ttest_ind(epsilon_rewards, thompson_rewards, alternative='two-sided'))
 
 
 
